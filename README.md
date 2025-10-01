@@ -6,7 +6,7 @@ This project uses a Raspberry Pi and a camera to perform face recognition and un
 
 1.  Clone the repository:
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/dhavalp16/HomeAuto.git
     ```
 2.  Install the dependencies:
     ```bash

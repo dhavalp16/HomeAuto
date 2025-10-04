@@ -4,7 +4,7 @@ import numpy as np
 from picamera2 import Picamera2
 import time
 import pickle
-from gpiozero import LED
+from gpiozero import LED, Button
 
 # Load pre-trained face encodings
 print("[INFO] loading encodings...")
@@ -20,6 +20,7 @@ picam2.start()
 
 # Initialize GPIO
 output = LED(18, active_high=False)
+button = Button(17)
 
 # Initialize our variables
 cv_scaler = 6 # this has to be a whole number
@@ -31,16 +32,18 @@ frame_count = 0
 start_time = time.time()
 fps = 0
 
+## --- MODIFICATION: Removed the timer variables ---
+
 # List of names that will trigger the GPIO pin
 authorized_names = ["dhaval"]  # Replace with names you wish to authorise THIS IS CASE-SENSITIVE
 
 def process_frame(frame):
     global face_locations, face_encodings, face_names
     
-    # Resize the frame using cv_scaler to increase performance (less pixels processed, less time spent)
+    # Resize the frame using cv_scaler to increase performance
     resized_frame = cv2.resize(frame, (0, 0), fx=(1/cv_scaler), fy=(1/cv_scaler))
     
-    # Convert the image from BGR to RGB colour space, the facial recognition library uses RGB, OpenCV uses BGR
+    # Convert the image from BGR to RGB
     rgb_resized_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB)
     
     # Find all the faces and face encodings in the current frame of video
@@ -51,32 +54,23 @@ def process_frame(frame):
     authorized_face_detected = False
     
     for face_encoding in face_encodings:
-        # See if the face is a match for the known face(s)
         matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
         name = "Unknown"
         
-        # Use the known face with the smallest distance to the new face
         face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
         best_match_index = np.argmin(face_distances)
         if matches[best_match_index]:
             name = known_face_names[best_match_index]
-            # Check if the detected face is in our authorized list
             if name in authorized_names:
                 authorized_face_detected = True
         face_names.append(name)
     
-    # Control the GPIO pin based on face detection
-    if authorized_face_detected:
-        output.on()  # Turn on Pin
-    else:
-        output.off()  # Turn off Pin
-    
-    return frame
+    return authorized_face_detected
 
 def draw_results(frame):
     # Display the results
     for (top, right, bottom, left), name in zip(face_locations, face_names):
-        # Scale back up face locations since the frame we detected in was scaled
+        # Scale back up face locations
         top *= cv_scaler
         right *= cv_scaler
         bottom *= cv_scaler
@@ -110,11 +104,19 @@ while True:
     # Capture a frame from camera
     frame = picam2.capture_array()
     
-    # Process the frame with the function
-    processed_frame = process_frame(frame)
+    # Process the frame to see if an authorized face is present
+    is_authorized = process_frame(frame)
+    
+    # --- MODIFICATION: Simplified lock control logic ---
+    # Turn the relay ON if an authorized face is detected OR if the button is currently being pressed.
+    if is_authorized or button.is_pressed:
+        output.on()
+    else:
+        output.off()
+    # --- END OF MODIFICATION ---
     
     # Get the text and boxes to be drawn based on the processed frame
-    display_frame = draw_results(processed_frame)
+    display_frame = draw_results(frame)
     
     # Calculate and update FPS
     current_fps = calculate_fps()
